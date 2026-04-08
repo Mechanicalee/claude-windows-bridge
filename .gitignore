@@ -1,0 +1,11 @@
+# Bridge runtime files — don't commit these
+claude-command.json
+claude-result.json
+claude-screenshot.png
+claude-bridge.log
+perf-metrics.csv
+perf-report.txt
+perf-phase.txt
+capture.pcapng
+interfaces.txt
+*.ps1.bak
