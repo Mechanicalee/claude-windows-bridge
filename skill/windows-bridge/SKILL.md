@@ -1,7 +1,7 @@
 ---
 name: windows-bridge
 description: >
-  Use this skill whenever the user asks Claude to do ANYTHING on their Windows PC â open apps
+  Use this skill whenever the user asks Claude to do ANYTHING on their Windows PC — open apps
   like Excel, Word, Notepad, or any program; run system commands; check what's running; manage
   files via Windows Explorer; change settings; tweak display/sound/power settings; search for
   files; create or edit documents; click buttons or interact with app UIs; or generally control
@@ -15,8 +15,8 @@ description: >
 # Windows Bridge v3.0
 
 The user has a PowerShell bridge running on their Windows PC that gives Claude full control.
-You write structured JSON commands to a shared folder â bridge executes â writes results and
-an optional screenshot back â you read them and decide next steps.
+You write structured JSON commands to a shared folder → bridge executes → writes results and
+an optional screenshot back → you read them and decide next steps.
 
 ## File locations
 
@@ -38,7 +38,7 @@ Typical path: `/sessions/cool-determined-volta/mnt/Claude/`
 
 ---
 
-## Step 1 â Always check the bridge first
+## Step 1 — Always check the bridge first
 
 Read `claude-result.json`. If `status` is `"ready"` or shows a recent result, the bridge is
 running. If missing or stale, tell the user:
@@ -47,7 +47,7 @@ running. If missing or stale, tell the user:
 
 ---
 
-## Step 2 â Send a command
+## Step 2 — Send a command
 
 Write `claude-command.json` using the `Write` tool. All commands share these optional fields:
 
@@ -63,7 +63,7 @@ Write `claude-command.json` using the `Write` tool. All commands share these opt
 
 ## Command types
 
-### Type: `shell` â PowerShell one-liner
+### Type: `shell` — PowerShell one-liner
 ```json
 {
   "type": "shell",
@@ -74,7 +74,7 @@ Write `claude-command.json` using the `Write` tool. All commands share these opt
 }
 ```
 
-### Type: `script` â Run a .ps1 file from the Claude folder
+### Type: `script` — Run a .ps1 file from the Claude folder
 Write the script first with the `Write` tool, then execute it:
 ```json
 {
@@ -85,7 +85,7 @@ Write the script first with the `Write` tool, then execute it:
 }
 ```
 
-### Type: `search` â Find files on the PC
+### Type: `search` — Find files on the PC
 ```json
 {
   "type": "search",
@@ -97,7 +97,7 @@ Write the script first with the `Write` tool, then execute it:
 ```
 `root` defaults to `C:\`. Returns JSON array with FullName, Name, LastWriteTime, Length.
 
-### Type: `screenshot` â Capture screen immediately
+### Type: `screenshot` — Capture screen immediately
 ```json
 {
   "type": "screenshot",
@@ -110,7 +110,7 @@ Write the script first with the `Write` tool, then execute it:
 ## UI Automation commands (v3.0)
 
 These commands use the Windows UIAutomation API to find and interact with UI elements
-semantically â by name, control type, or automation ID â rather than by pixel coordinates.
+semantically — by name, control type, or automation ID — rather than by pixel coordinates.
 This is far more reliable than screenshot-and-guess. Use these for any task that involves
 clicking buttons, filling forms, navigating menus, or reading UI state.
 
@@ -123,7 +123,7 @@ clicking buttons, filling forms, navigating menus, or reading UI state.
 
 ---
 
-### Type: `ui_find` â List UI elements in a window
+### Type: `ui_find` — List UI elements in a window
 
 Returns a JSON array of interactive elements. Use this before clicking to discover what's
 available and find exact element names.
@@ -154,7 +154,7 @@ Filter by control type to reduce noise:
 | `max_results` | int | Max elements to return (default: 50) |
 | `include_offscreen` | bool | Include offscreen elements (default: false) |
 
-**Returns** â array of element objects:
+**Returns** — array of element objects:
 ```json
 [
   { "name": "Save", "type": "Button", "automation_id": "1", "rect": [120, 45, 200, 70], "enabled": true, "visible": true },
@@ -166,7 +166,7 @@ Filter by control type to reduce noise:
 
 ---
 
-### Type: `ui_click` â Click a UI element
+### Type: `ui_click` — Click a UI element
 
 Clicks by element name or automation ID. Prefers `InvokePattern` (reliable, no mouse move
 needed) and falls back to a physical click at the element's centre. Also supports raw
@@ -182,7 +182,7 @@ coordinate clicks when UIAutomation isn't needed.
 }
 ```
 
-**Click by automation ID (most stable â use when available):**
+**Click by automation ID (most stable — use when available):**
 ```json
 {
   "type": "ui_click",
@@ -203,7 +203,7 @@ coordinate clicks when UIAutomation isn't needed.
 }
 ```
 
-**Raw coordinate click (no UIAutomation â use as last resort):**
+**Raw coordinate click (no UIAutomation — use as last resort):**
 ```json
 {
   "type": "ui_click",
@@ -217,14 +217,14 @@ coordinate clicks when UIAutomation isn't needed.
 | Field | Type | Description |
 |-------|------|-------------|
 | `element_name` | string | Name label of the element to click |
-| `automation_id` | string | AutomationId (from `ui_find` results) â preferred |
+| `automation_id` | string | AutomationId (from `ui_find` results) — preferred |
 | `control_type` | string | Optional type filter to disambiguate |
 | `window_title` | string | Scope search to this window |
 | `coordinates` | [x, y] | Raw pixel coordinates (skips element search) |
 
 ---
 
-### Type: `ui_type` â Type text into a UI element
+### Type: `ui_type` — Type text into a UI element
 
 Finds an element, focuses it, and types text. Uses `ValuePattern.SetValue()` when available
 (direct, no SendKeys escaping needed) or falls back to `SendKeys`.
@@ -278,7 +278,7 @@ Finds an element, focuses it, and types text. Uses `ValuePattern.SetValue()` whe
 
 ---
 
-### Type: `ui_tree` â Dump the UI element tree
+### Type: `ui_tree` — Dump the UI element tree
 
 Returns the full UIAutomation control tree for a window as nested JSON. Use this to
 understand an unfamiliar UI's structure before deciding how to interact with it.
@@ -302,9 +302,9 @@ understand an unfamiliar UI's structure before deciding how to interact with it.
 
 ---
 
-## Step 3 â Read the result
+## Step 3 — Read the result
 
-After writing the command, wait ~1â2 seconds then read the result. Use `Bash` with `cat`
+After writing the command, wait ~1–2 seconds then read the result. Use `Bash` with `cat`
 rather than the `Read` tool (which caches and returns stale data):
 
 ```bash
@@ -326,7 +326,7 @@ Result format:
 
 If `"screenshot": true` in the result, read the image to verify what happened:
 ```
-Read tool â /sessions/cool-determined-volta/mnt/Claude/claude-screenshot.png
+Read tool → /sessions/cool-determined-volta/mnt/Claude/claude-screenshot.png
 ```
 
 If `status` is `"error"`, report the error and suggest a fix.
@@ -335,7 +335,7 @@ Retry up to 5 times before giving up.
 
 ---
 
-## UX rules â always follow these
+## UX rules — always follow these
 
 1. **Prefer `ui_click` / `ui_type` over raw shell + SendKeys** for any UI interaction.
    UIAutomation is reliable across window positions and screen resolutions.
@@ -352,14 +352,14 @@ Retry up to 5 times before giving up.
 5. **Always take a screenshot after opening an app** to confirm it launched.
 
 6. **Confirm before destructive actions.** Deleting files, shutting down, killing system
-   processes â always ask the user first.
+   processes — always ask the user first.
 
 7. **One step at a time for multi-step workflows.** Send a command, read the result,
    inspect the screenshot, then send the next command.
 
 ---
 
-## Common tasks â ready to use
+## Common tasks — ready to use
 
 ### Open apps
 ```json
@@ -404,7 +404,7 @@ Retry up to 5 times before giving up.
 
 ### Create Word doc with content (COM automation)
 ```powershell
-# create-doc.ps1 â save to Claude folder first
+# create-doc.ps1 — save to Claude folder first
 $word = New-Object -ComObject Word.Application
 $word.Visible = $true
 $doc = $word.Documents.Add()
@@ -434,11 +434,11 @@ $doc.SaveAs("C:\Users\Lee\Documents\claude-doc.docx")
 
 | Symptom | Fix |
 |---------|-----|
-| `claude-result.json` not updating | Bridge stopped â ask user to restart `Start-Bridge.bat` |
+| `claude-result.json` not updating | Bridge stopped — ask user to restart `Start-Bridge.bat` |
 | `restore_focus` not working | Check `Get-Process \| Where MainWindowTitle -match 'Claude'` |
 | Script not found | Confirm script saved to Claude folder before running |
-| `ui_find` returns empty | Window title may not match â try partial title or omit it |
+| `ui_find` returns empty | Window title may not match — try partial title or omit it |
 | `ui_click` element not found | Run `ui_find` first to get exact name; try `ui_tree` for structure |
 | `ui_type` special chars wrong | Use `ValuePattern` path (set element_name/automation_id); or escape SendKeys chars |
-| UIAutomation unavailable | Very rare â requires .NET Framework (built-in on Win 10/11) |
+| UIAutomation unavailable | Very rare — requires .NET Framework (built-in on Win 10/11) |
 | Office COM fails | Office may not be installed or COM automation blocked by policy |
