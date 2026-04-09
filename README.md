@@ -14,6 +14,7 @@ relay, no special software — just PowerShell and a shared folder.
 - **Run PowerShell** — arbitrary commands, scripts, system queries
 - **Search files** — find anything on your PC by name, type, or location
 - **Office automation** — create/edit Word docs and Excel sheets via COM
+- **UI Automation** — find, click, and type into UI elements by name using the Windows accessibility API (v3.0)
 - **Network capture** — integrate with Wireshark/tshark for traffic analysis
 - **Screenshots** — Claude sees your screen after each action and reacts intelligently
 - **Focus restore** — Claude automatically brings itself back to the foreground after opening windows
@@ -52,7 +53,7 @@ Double-click **`Start-Bridge.bat`**.
 
 A terminal window opens and shows:
 ```
-Claude Bridge v2.1 started.
+Claude Bridge v3.0 started.
 Bridge folder: C:\Users\...\Documents\Claude
 Press Ctrl+C to stop.
 ```
@@ -88,6 +89,8 @@ The bridge polls for new commands every 300ms — typical round-trip latency is 
 
 ### Command format
 
+All commands share three optional fields: `screenshot`, `restore_focus`, and `close_after`.
+
 ```json
 {
   "type": "shell",
@@ -100,12 +103,39 @@ The bridge polls for new commands every 300ms — typical round-trip latency is 
 
 | Field | Values | Description |
 |-------|--------|-------------|
-| `type` | `shell`, `script`, `search`, `screenshot` | Command type |
+| `type` | `shell`, `script`, `search`, `screenshot`, `ui_find`, `ui_click`, `ui_type`, `ui_tree` | Command type |
 | `command` | PowerShell expression | For `shell` type |
 | `script` | filename.ps1 | For `script` type — must be in the Claude folder |
 | `screenshot` | `true`/`false` | Capture screen after command |
 | `restore_focus` | `true`/`false` | Bring Claude window back to foreground |
 | `close_after` | process name | Kill this process after command (e.g. `"SystemSettings"`) |
+
+### UI Automation commands (v3.0)
+
+Claude can find and interact with UI elements by name using the Windows accessibility API —
+no pixel-coordinate guessing needed.
+
+**Find elements in a window:**
+```json
+{ "type": "ui_find", "window_title": "Save As", "control_type": "Button" }
+```
+
+**Click a button by name:**
+```json
+{ "type": "ui_click", "window_title": "Save As", "element_name": "Save", "screenshot": true }
+```
+
+**Type into a text field:**
+```json
+{ "type": "ui_type", "window_title": "Save As", "element_name": "File name", "text": "report.docx" }
+```
+
+**Dump the full UI tree to explore an unfamiliar window:**
+```json
+{ "type": "ui_tree", "window_title": "Notepad", "max_depth": 4 }
+```
+
+See the skill documentation (`skill/windows-bridge/SKILL.md`) for full field reference.
 
 For file search:
 ```json
@@ -179,8 +209,8 @@ The bridge is intentionally simple — one file, one loop. To extend it:
 
 - **Add a new command type:** add a case to the `switch` block in `claude-bridge.ps1`
 - **Add persistent state:** write/read additional JSON files in the bridge folder
-- **Add GUI automation:** integrate [AutoHotkey](https://www.autohotkey.com/) scripts called
-  from PowerShell for click-level UI control
+- **Extend UI Automation:** add more command types to the `switch` block in `claude-bridge.ps1`
+  using the existing `UIAutomationClient` assembly that's already loaded
 - **Update the skill:** edit `skill/windows-bridge/SKILL.md` and reinstall the `.skill` file
 
 Pull requests welcome!
