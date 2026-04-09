@@ -3,24 +3,24 @@
 #  Run this script to allow Claude to control your Windows PC.
 #
 #  Command types:
-#    shell      â PowerShell one-liner
-#    script     â Run a .ps1 file from the Claude folder
-#    search     â Find files on the PC
-#    screenshot â Capture screen immediately
-#    ui_find    â List interactive UI elements in a window
-#    ui_click   â Click a UI element by name, automation ID, or coordinates
-#    ui_type    â Type text into a UI element or the active focus
-#    ui_tree    â Dump the full UI automation tree of a window
+#    shell      — PowerShell one-liner
+#    script     — Run a .ps1 file from the Claude folder
+#    search     — Find files on the PC
+#    screenshot — Capture screen immediately
+#    ui_find    — List interactive UI elements in a window
+#    ui_click   — Click a UI element by name, automation ID, or coordinates
+#    ui_type    — Type text into a UI element or the active focus
+#    ui_tree    — Dump the full UI automation tree of a window
 #
 #  Shared fields (all types):
-#    screenshot    : true/false â capture screen after command
-#    restore_focus : true/false â bring Claude/Cowork back to foreground
+#    screenshot    : true/false — capture screen after command
+#    restore_focus : true/false — bring Claude/Cowork back to foreground
 #    close_after   : process name to kill after command
 #
 #  Files:
-#    claude-command.json   â Claude writes commands here
-#    claude-result.json    â Bridge writes results here
-#    claude-screenshot.png â Screenshot (if requested)
+#    claude-command.json   — Claude writes commands here
+#    claude-result.json    — Bridge writes results here
+#    claude-screenshot.png — Screenshot (if requested)
 # =============================================================
 
 $bridgeDir      = Split-Path -Parent $MyInvocation.MyCommand.Path
@@ -29,7 +29,7 @@ $resultFile     = Join-Path $bridgeDir "claude-result.json"
 $logFile        = Join-Path $bridgeDir "claude-bridge.log"
 $screenshotFile = Join-Path $bridgeDir "claude-screenshot.png"
 
-# ââ Logging âââââââââââââââââââââââââââââââââââââââââââââââââââ
+# ── Logging ───────────────────────────────────────────────────
 function Write-Log {
     param($Message)
     $timestamp = Get-Date -Format "yyyy-MM-dd HH:mm:ss"
@@ -38,7 +38,7 @@ function Write-Log {
     Write-Host $line
 }
 
-# ââ Result writer âââââââââââââââââââââââââââââââââââââââââââââ
+# ── Result writer ─────────────────────────────────────────────
 function Write-Result {
     param($Status, $Output, $Err, $Cmd, $Type, $Screenshot = $false)
     @{
@@ -52,7 +52,7 @@ function Write-Result {
     } | ConvertTo-Json -Depth 10 | Set-Content -Path $resultFile -Encoding UTF8
 }
 
-# ââ Native Win32 types (defined once at startup) ââââââââââââââ
+# ── Native Win32 types (defined once at startup) ──────────────
 Add-Type -AssemblyName System.Windows.Forms
 Add-Type -AssemblyName System.Drawing
 
@@ -78,7 +78,7 @@ public class NativeWin {
 }
 "@ -ErrorAction SilentlyContinue
 
-# ââ UIAutomation assembly loading âââââââââââââââââââââââââââââ
+# ── UIAutomation assembly loading ─────────────────────────────
 $script:uiaLoaded = $false
 function Ensure-UIAutomation {
     if ($script:uiaLoaded) { return $true }
@@ -94,7 +94,7 @@ function Ensure-UIAutomation {
     }
 }
 
-# ââ Screenshot ââââââââââââââââââââââââââââââââââââââââââââââââ
+# ── Screenshot ────────────────────────────────────────────────
 function Take-Screenshot {
     param($Path)
     try {
@@ -112,7 +112,7 @@ function Take-Screenshot {
     }
 }
 
-# ââ Focus restore âââââââââââââââââââââââââââââââââââââââââââââ
+# ── Focus restore ─────────────────────────────────────────────
 function Restore-ClaudeFocus {
     try {
         $titles = @("Claude", "Cowork", "Claude - Cowork", "Anthropic")
@@ -140,7 +140,7 @@ function Restore-ClaudeFocus {
     }
 }
 
-# ââ Close a process by name âââââââââââââââââââââââââââââââââââ
+# ── Close a process by name ───────────────────────────────────
 function Close-AfterCommand {
     param($ProcessName)
     if (-not $ProcessName) { return }
@@ -150,7 +150,7 @@ function Close-AfterCommand {
     } catch { Write-Log "Could not close $ProcessName : $_" }
 }
 
-# ââ Post-command cleanup ââââââââââââââââââââââââââââââââââââââ
+# ── Post-command cleanup ──────────────────────────────────────
 function Invoke-Cleanup {
     param($TakeScreenshot, $CloseAfter, $RestoreFocus)
     $didScreenshot = $false
@@ -159,11 +159,11 @@ function Invoke-Cleanup {
         $didScreenshot = Take-Screenshot -Path $screenshotFile
     }
     if ($CloseAfter) { Start-Sleep -Milliseconds 400; Close-AfterCommand -ProcessName $CloseAfter }
-    if ($RestoreFocus) { Start-Sleep -Milliseconds 300; Restore-Claudeocus }
+    if ($RestoreFocus) { Start-Sleep -Milliseconds 300; Restore-ClaudeFocus }
     return $didScreenshot
 }
 
-# ââ Standard command handlers âââââââââââââââââââââââââââââââââ
+# ── Standard command handlers ─────────────────────────────────
 function Invoke-ShellCommand {
     param($cmd, $takeScreenshot, $closeAfter, $restoreFocus)
     try {
@@ -224,7 +224,7 @@ function Invoke-Screenshot {
     else      { Write-Result -Status "error"   -Output "" -Err "Screenshot failed." -Cmd "screenshot" -Type "screenshot" }
 }
 
-# ââ UI Automation helpers âââââââââââââââââââââââââââââââââââââ
+# ── UI Automation helpers ─────────────────────────────────────
 
 # Map friendly type names to ControlType objects
 function Get-ControlTypeObj {
@@ -301,7 +301,7 @@ function Format-Element {
     }
 }
 
-# Locate a specific elemnt by name or automation_id within a window
+# Locate a specific element by name or automation_id within a window
 function Find-TargetElement {
     param($data)
     $root = Find-WindowElement -windowTitle $data.window_title
@@ -365,9 +365,9 @@ function Build-ElementTree {
     return $node
 }
 
-# ââ UI Automation command handlers ââââââââââââââââââââââââââââ
+# ── UI Automation command handlers ────────────────────────────
 
-# ui_find â list interactive elements in a window
+# ui_find — list interactive elements in a window
 # Fields: window_title (opt), control_type (opt), max_results (opt, default 50)
 function Invoke-UIFind {
     param($data)
@@ -410,17 +410,17 @@ function Invoke-UIFind {
     }
 }
 
-# ui_click â click a UI element or raw screen coordinates
+# ui_click — click a UI element or raw screen coordinates
 # Fields:
-#   element_name (opt)   â name label of the element
-#   automation_id (opt)  â AutomationId of the element
-#   control_type (opt)   â narrow search to this type (e.g. "Button")
-#   window_title (opt)   â scope search to this window
-#   coordinates (opt)    â [x, y] pixel coords (skips element search)
+#   element_name (opt)   — name label of the element
+#   automation_id (opt)  — AutomationId of the element
+#   control_type (opt)   — narrow search to this type (e.g. "Button")
+#   window_title (opt)   — scope search to this window
+#   coordinates (opt)    — [x, y] pixel coords (skips element search)
 function Invoke-UIClick {
     param($data)
 
-    # ââ Raw coordinate click (no UIAutomation needed) ââââââââââ
+    # ── Raw coordinate click (no UIAutomation needed) ──────────
     if ($data.coordinates) {
         $x = [int]$data.coordinates[0]
         $y = [int]$data.coordinates[1]
@@ -430,7 +430,7 @@ function Invoke-UIClick {
         return
     }
 
-    # ââ Element-based click ââââââââââââââââââââââââââââââââââââ
+    # ── Element-based click ────────────────────────────────────
     if (-not (Ensure-UIAutomation)) {
         Write-Result -Status "error" -Output "" -Err "UIAutomation unavailable." -Cmd "ui_click" -Type "ui_click"; return
     }
@@ -443,7 +443,7 @@ function Invoke-UIClick {
             return
         }
 
-        # Prefer InvokePattern â works for buttons without moving the mouse
+        # Prefer InvokePattern — works for buttons without moving the mouse
         $invokePattern = $null
         try { $invokePattern = $el.GetCurrentPattern([System.Windows.Automation.InvokePattern]::Pattern) } catch {}
 
@@ -466,18 +466,18 @@ function Invoke-UIClick {
     }
 }
 
-# ui_type â type text into a UI element or the currently focused field
+# ui_type — type text into a UI element or the currently focused field
 # Fields:
-#   text (required)      â text to type
-#   element_name (opt)   â focus this element first
-#   automation_id (opt)  â focus this element first (preferred over element_name)
-#   window_title (opt)   â scope element search
-#   clear_first (opt)    â select-all + delete before typing (default: false)
+#   text (required)      — text to type
+#   element_name (opt)   — focus this element first
+#   automation_id (opt)  — focus this element first (preferred over element_name)
+#   window_title (opt)   — scope element search
+#   clear_first (opt)    — select-all + delete before typing (default: false)
 function Invoke-UIType {
     param($data)
     $text = if ($data.text) { [string]$data.text } else { "" }
 
-    # ââ If an element is specified, locate and focus it ââââââââ
+    # ── If an element is specified, locate and focus it ────────
     if ($data.element_name -or $data.automation_id) {
         if (-not (Ensure-UIAutomation)) {
             Write-Result -Status "error" -Output "" -Err "UIAutomation unavailable." -Cmd "ui_type" -Type "ui_type"; return
@@ -490,7 +490,7 @@ function Invoke-UIType {
                 return
             }
 
-            # Try ValuePattern â directly sets value, no SendKeys escaping needed
+            # Try ValuePattern — directly sets value, no SendKeys escaping needed
             $vp = $null
             try { $vp = $el.GetCurrentPattern([System.Windows.Automation.ValuePattern]::Pattern) } catch {}
 
@@ -513,7 +513,7 @@ function Invoke-UIType {
         }
     }
 
-    # ââ SendKeys to active focus âââââââââââââââââââââââââââââââ
+    # ── SendKeys to active focus ───────────────────────────────
     try {
         if ($data.clear_first) {
             [System.Windows.Forms.SendKeys]::SendWait("^a")
@@ -529,10 +529,10 @@ function Invoke-UIType {
     }
 }
 
-# ui_tree â dump the UIAutomation control tree for a window
+# ui_tree — dump the UIAutomation control tree for a window
 # Fields:
-#   window_title (opt)  â target window (defaults to entire desktop)
-#   max_depth (opt)     â tree depth limit (default 5, max 8)
+#   window_title (opt)  — target window (defaults to entire desktop)
+#   max_depth (opt)     — tree depth limit (default 5, max 8)
 function Invoke-UITree {
     param($data)
     if (-not (Ensure-UIAutomation)) {
@@ -551,7 +551,7 @@ function Invoke-UITree {
     }
 }
 
-# ââ Startup âââââââââââââââââââââââââââââââââââââââââââââââââââ
+# ── Startup ───────────────────────────────────────────────────
 Clear-Content -Path $logFile -ErrorAction SilentlyContinue
 Write-Log "Claude Bridge v3.0 started."
 Write-Log "Bridge folder : $bridgeDir"
@@ -559,7 +559,7 @@ Write-Log "Press Ctrl+C to stop."
 Write-Log "----------------------------------------------------"
 Write-Result -Status "ready" -Output "Claude Bridge v3.0 is running." -Err "" -Cmd "" -Type "ready"
 
-# ââ Main loop âââââââââââââââââââââââââââââââââââââââââââââââââ
+# ── Main loop ─────────────────────────────────────────────────
 while ($true) {
     if (Test-Path $commandFile) {
         try {
