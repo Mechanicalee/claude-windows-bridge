@@ -4,15 +4,15 @@ description: >
   Use this skill whenever the user asks Claude to do ANYTHING on their Windows PC — open apps
   like Excel, Word, Notepad, or any program; run system commands; check what's running; manage
   files via Windows Explorer; change settings; tweak display/sound/power settings; search for
-  files; create or edit documents; or generally control their computer. This skill gives Claude
-  real Windows control through a file-based bridge the user has set up. Trigger this skill any
-  time the user says things like "open Excel", "launch Word", "close that app", "what processes
-  are running", "find that file", "change my display settings", "create a new document", "run
-  this on my PC", "can you open...", or any request implying interaction with Windows or desktop
-  apps. Don't attempt Windows tasks without reading this skill first.
+  files; create or edit documents; click buttons or interact with app UIs; or generally control
+  their computer. This skill gives Claude real Windows control through a file-based bridge the
+  user has set up. Trigger this skill any time the user says things like "open Excel", "launch
+  Word", "close that app", "click the OK button", "type in the search box", "what processes are
+  running", "find that file", "change my display settings", or any request implying interaction
+  with Windows or desktop apps. Don't attempt Windows tasks without reading this skill first.
 ---
 
-# Windows Bridge v2.1
+# Windows Bridge v3.0
 
 The user has a PowerShell bridge running on their Windows PC that gives Claude full control.
 You write structured JSON commands to a shared folder → bridge executes → writes results and
@@ -57,9 +57,11 @@ Write `claude-command.json` using the `Write` tool. All commands share these opt
 | `restore_focus` | bool | Bring Claude/Cowork window back to foreground after command (default: false) |
 | `close_after` | string | Process name to kill after command, e.g. `"SystemSettings"` |
 
-**Always set `restore_focus: true` for any command that opens a UI window** — this brings
-Claude back to the foreground so the user can see progress. Always set `close_after` for
-temporary windows (Settings, dialogs) once you've finished with them.
+**Always set `restore_focus: true` for any command that opens a UI window.**
+
+---
+
+## Command types
 
 ### Type: `shell` — PowerShell one-liner
 ```json
@@ -105,6 +107,201 @@ Write the script first with the `Write` tool, then execute it:
 
 ---
 
+## UI Automation commands (v3.0)
+
+These commands use the Windows UIAutomation API to find and interact with UI elements
+semantically — by name, control type, or automation ID — rather than by pixel coordinates.
+This is far more reliable than screenshot-and-guess. Use these for any task that involves
+clicking buttons, filling forms, navigating menus, or reading UI state.
+
+### Recommended workflow for UI interaction
+
+1. **Open the app** with a `shell` command + `screenshot: true`
+2. **Discover the UI** with `ui_find` (lists all interactive elements)
+3. **Interact** with `ui_click` or `ui_type` using element names from step 2
+4. **Verify** with `screenshot: true` on the interaction command
+
+---
+
+### Type: `ui_find` — List UI elements in a window
+
+Returns a JSON array of interactive elements. Use this before clicking to discover what's
+available and find exact element names.
+
+```json
+{
+  "type": "ui_find",
+  "window_title": "Notepad",
+  "screenshot": false
+}
+```
+
+Filter by control type to reduce noise:
+```json
+{
+  "type": "ui_find",
+  "window_title": "Save As",
+  "control_type": "Button"
+}
+```
+
+**Fields:**
+
+| Field | Type | Description |
+|-------|------|-------------|
+| `window_title` | string | Window to search (partial match OK). Omit to search all windows. |
+| `control_type` | string | Optional filter: `"Button"`, `"Edit"`, `"CheckBox"`, `"ComboBox"`, `"MenuItem"`, `"TabItem"`, `"ListItem"`, `"Slider"`, `"RadioButton"`, `"Text"`, etc. |
+| `max_results` | int | Max elements to return (default: 50) |
+| `include_offscreen` | bool | Include offscreen elements (default: false) |
+
+**Returns** — array of element objects:
+```json
+[
+  { "name": "Save", "type": "Button", "automation_id": "1", "rect": [120, 45, 200, 70], "enabled": true, "visible": true },
+  { "name": "Cancel", "type": "Button", "automation_id": "2", "rect": [210, 45, 290, 70], "enabled": true, "visible": true }
+]
+```
+
+`rect` is `[left, top, right, bottom]` in screen pixels.
+
+---
+
+### Type: `ui_click` — Click a UI element
+
+Clicks by element name or automation ID. Prefers `InvokePattern` (reliable, no mouse move
+needed) and falls back to a physical click at the element's centre. Also supports raw
+coordinate clicks when UIAutomation isn't needed.
+
+**Click by element name:**
+```json
+{
+  "type": "ui_click",
+  "window_title": "Save As",
+  "element_name": "Save",
+  "screenshot": true
+}
+```
+
+**Click by automation ID (most stable — use when available):**
+```json
+{
+  "type": "ui_click",
+  "window_title": "Save As",
+  "automation_id": "1",
+  "screenshot": true
+}
+```
+
+**Narrow by control type to avoid ambiguity:**
+```json
+{
+  "type": "ui_click",
+  "window_title": "Notepad",
+  "element_name": "File",
+  "control_type": "MenuItem",
+  "screenshot": true
+}
+```
+
+**Raw coordinate click (no UIAutomation — use as last resort):**
+```json
+{
+  "type": "ui_click",
+  "coordinates": [640, 400],
+  "screenshot": true
+}
+```
+
+**Fields:**
+
+| Field | Type | Description |
+|-------|------|-------------|
+| `element_name` | string | Name label of the element to click |
+| `automation_id` | string | AutomationId (from `ui_find` results) — preferred |
+| `control_type` | string | Optional type filter to disambiguate |
+| `window_title` | string | Scope search to this window |
+| `coordinates` | [x, y] | Raw pixel coordinates (skips element search) |
+
+---
+
+### Type: `ui_type` — Type text into a UI element
+
+Finds an element, focuses it, and types text. Uses `ValuePattern.SetValue()` when available
+(direct, no SendKeys escaping needed) or falls back to `SendKeys`.
+
+**Type into a named field:**
+```json
+{
+  "type": "ui_type",
+  "window_title": "Save As",
+  "element_name": "File name",
+  "text": "my-document.docx",
+  "screenshot": true
+}
+```
+
+**Clear existing content first:**
+```json
+{
+  "type": "ui_type",
+  "window_title": "Notepad",
+  "element_name": "Text Editor",
+  "text": "Hello from Claude!",
+  "clear_first": true,
+  "screenshot": true
+}
+```
+
+**Type into whatever is currently focused (no element lookup):**
+```json
+{
+  "type": "ui_type",
+  "text": "Hello!",
+  "screenshot": true
+}
+```
+
+**Fields:**
+
+| Field | Type | Description |
+|-------|------|-------------|
+| `text` | string | Text to type (required) |
+| `element_name` | string | Focus this element first |
+| `automation_id` | string | Focus this element first (preferred) |
+| `window_title` | string | Scope element search |
+| `clear_first` | bool | Select-all + delete before typing (default: false) |
+
+> **Note on special characters with SendKeys fallback:** Characters like `+`, `^`, `%`, `~`,
+> `{`, `}`, `(`, `)` are SendKeys control sequences. If typing into a field that doesn't
+> support `ValuePattern`, escape them: `{+}`, `{^}`, etc. The `ValuePattern` path (preferred)
+> has no such restrictions.
+
+---
+
+### Type: `ui_tree` — Dump the UI element tree
+
+Returns the full UIAutomation control tree for a window as nested JSON. Use this to
+understand an unfamiliar UI's structure before deciding how to interact with it.
+
+```json
+{
+  "type": "ui_tree",
+  "window_title": "Notepad"
+}
+```
+
+**Fields:**
+
+| Field | Type | Description |
+|-------|------|-------------|
+| `window_title` | string | Window to dump (partial match OK) |
+| `max_depth` | int | Tree depth limit (default: 5, max: 8) |
+
+> For complex windows (Office, browsers), `ui_find` is faster and less verbose than `ui_tree`.
+> Use `ui_tree` only when you need to understand the full structure.
+
+---
+
 ## Step 3 — Read the result
 
 After writing the command, wait ~1–2 seconds then read the result. Use `Bash` with `cat`
@@ -121,75 +318,91 @@ Result format:
   "output": "...",
   "error": "",
   "command": "...",
-  "type": "shell",
+  "type": "ui_click",
   "screenshot": true,
   "timestamp": "2026-04-08T13:00:00"
 }
 ```
 
-If `"screenshot": true` in the result, read the image to see what happened on screen:
-
+If `"screenshot": true` in the result, read the image to verify what happened:
 ```
 Read tool → /sessions/cool-determined-volta/mnt/Claude/claude-screenshot.png
 ```
 
 If `status` is `"error"`, report the error and suggest a fix.
-If the timestamp matches the previous result, wait another second and try again (still
-processing). Retry up to 5 times before giving up.
+If the timestamp matches the previous result, wait another second and retry (still processing).
+Retry up to 5 times before giving up.
 
 ---
 
 ## UX rules — always follow these
 
-1. **Restore focus after every UI action.** Any command that opens a window
-   (`Start-Process`, settings, apps) must include `"restore_focus": true` so the user can
-   see Claude's progress without switching windows manually.
+1. **Prefer `ui_click` / `ui_type` over raw shell + SendKeys** for any UI interaction.
+   UIAutomation is reliable across window positions and screen resolutions.
 
-2. **Close temporary windows when done.** Settings pages, dialogs, and helper windows
-   should be closed with `close_after` once you've finished with them. Common process names:
-   - Windows Settings: `"SystemSettings"`
-   - Notepad: `"notepad"`
-   - Calculator: `"Calculator"`
-   - File Explorer: `"explorer"` (use carefully — closes all Explorer windows)
+2. **Run `ui_find` before clicking** when the window is unfamiliar or has multiple elements
+   with similar names. Get the exact name/automation_id first.
 
-3. **Always take a screenshot after opening an app.** This confirms it launched and lets
-   you verify the state before proceeding with further commands.
+3. **Restore focus after every UI action.** Any command that opens a window must include
+   `"restore_focus": true` so the user can see Claude's progress.
 
-4. **Confirm before destructive actions.** Deleting files, shutting down, killing system
+4. **Close temporary windows when done.** Use `close_after` for Settings, dialogs, and
+   helper windows. Common process names: `"SystemSettings"`, `"notepad"`, `"Calculator"`.
+
+5. **Always take a screenshot after opening an app** to confirm it launched.
+
+6. **Confirm before destructive actions.** Deleting files, shutting down, killing system
    processes — always ask the user first.
 
-5. **One step at a time for multi-step workflows.** Send a command, read the result,
-   inspect the screenshot, then send the next command. Don't batch irreversible actions.
+7. **One step at a time for multi-step workflows.** Send a command, read the result,
+   inspect the screenshot, then send the next command.
 
 ---
 
 ## Common tasks — ready to use
 
-### Open apps (always restore focus)
+### Open apps
 ```json
 { "type": "shell", "command": "Start-Process winword", "screenshot": true, "restore_focus": true }
 { "type": "shell", "command": "Start-Process excel",   "screenshot": true, "restore_focus": true }
 { "type": "shell", "command": "Start-Process notepad", "screenshot": true, "restore_focus": true }
-{ "type": "shell", "command": "Start-Process 'C:\\path\\to\\file.xlsx'", "screenshot": true, "restore_focus": true }
 ```
 
-### Check and close Settings pages
+### Discover what's in a window
+```json
+{ "type": "ui_find", "window_title": "Notepad", "control_type": "Button" }
+{ "type": "ui_find", "window_title": "Save As" }
+{ "type": "ui_tree", "window_title": "Control Panel", "max_depth": 3 }
+```
+
+### Click UI elements
+```json
+{ "type": "ui_click", "window_title": "Save As", "element_name": "Save", "screenshot": true }
+{ "type": "ui_click", "window_title": "Notepad", "element_name": "File", "control_type": "MenuItem" }
+{ "type": "ui_click", "window_title": "Notepad", "automation_id": "MenuBar", "screenshot": true }
+```
+
+### Fill in text fields
+```json
+{ "type": "ui_type", "window_title": "Save As", "element_name": "File name", "text": "report.docx", "screenshot": true }
+{ "type": "ui_type", "window_title": "Notepad", "element_name": "Text Editor", "text": "Hello!", "clear_first": true }
+```
+
+### Settings pages
 ```json
 { "type": "shell", "command": "Start-Process ms-settings:display",    "screenshot": true, "restore_focus": true, "close_after": "SystemSettings" }
 { "type": "shell", "command": "Start-Process ms-settings:sound",      "screenshot": true, "restore_focus": true, "close_after": "SystemSettings" }
 { "type": "shell", "command": "Start-Process ms-settings:power-sleep","screenshot": true, "restore_focus": true, "close_after": "SystemSettings" }
 ```
 
-### System info (no UI — no restore needed)
+### System info
 ```json
 { "type": "shell", "command": "Get-Process | Sort-Object CPU -Descending | Select-Object -First 10 Name,CPU,WorkingSet | Out-String" }
 { "type": "shell", "command": "Get-PSDrive C | Select-Object Used,Free | Out-String" }
 { "type": "shell", "command": "Get-ComputerInfo | Select-Object OsName,TotalPhysicalMemory | Out-String" }
-{ "type": "shell", "command": "Get-NetAdapter | Select-Object Name,Status,LinkSpeed | Out-String" }
 ```
 
 ### Create Word doc with content (COM automation)
-Write a script, then run it:
 ```powershell
 # create-doc.ps1 — save to Claude folder first
 $word = New-Object -ComObject Word.Application
@@ -202,34 +415,15 @@ $doc.SaveAs("C:\Users\Lee\Documents\claude-doc.docx")
 { "type": "script", "script": "create-doc.ps1", "screenshot": true, "restore_focus": true }
 ```
 
-### Create Excel workbook with data
-```powershell
-# create-sheet.ps1
-$xl = New-Object -ComObject Excel.Application
-$xl.Visible = $true
-$wb = $xl.Workbooks.Add()
-$ws = $wb.Sheets.Item(1)
-$ws.Cells.Item(1,1) = "Name"; $ws.Cells.Item(1,2) = "Value"
-$ws.Cells.Item(2,1) = "Claude"; $ws.Cells.Item(2,2) = 42
-$wb.SaveAs("C:\Users\Lee\Documents\claude-sheet.xlsx")
-```
-
 ### File search
 ```json
 { "type": "search", "root": "C:\\Users\\Lee", "pattern": "budget", "extension": ".xlsx", "maxResults": 20 }
-```
-
-### Network traffic capture (requires Wireshark/tshark installed)
-```json
-{ "type": "shell", "command": "& 'C:\\Program Files\\Wireshark\\tshark.exe' -i 5 -a duration:15 -w 'C:\\Users\\Lee\\Documents\\Claude\\capture.pcapng' 2>&1 | Out-String" }
 ```
 
 ---
 
 ## Working with files Claude created
 
-Claude can create `.docx`, `.xlsx`, `.pptx` and other files using its own file skills and
-save them to the Claude folder. To open one on Windows:
 ```json
 { "type": "shell", "command": "Start-Process 'C:\\Users\\Lee\\Documents\\Claude\\myfile.docx'", "screenshot": true, "restore_focus": true }
 ```
@@ -241,7 +435,10 @@ save them to the Claude folder. To open one on Windows:
 | Symptom | Fix |
 |---------|-----|
 | `claude-result.json` not updating | Bridge stopped — ask user to restart `Start-Bridge.bat` |
-| `restore_focus` not working | Claude window title may differ — check `Get-Process \| Where MainWindowTitle -match 'Claude'` |
-| Script not found error | Confirm script was saved to the Claude folder before running |
-| Long-running command timeout | Warn user, use tshark/etc with duration limits |
+| `restore_focus` not working | Check `Get-Process \| Where MainWindowTitle -match 'Claude'` |
+| Script not found | Confirm script saved to Claude folder before running |
+| `ui_find` returns empty | Window title may not match — try partial title or omit it |
+| `ui_click` element not found | Run `ui_find` first to get exact name; try `ui_tree` for structure |
+| `ui_type` special chars wrong | Use `ValuePattern` path (set element_name/automation_id); or escape SendKeys chars |
+| UIAutomation unavailable | Very rare — requires .NET Framework (built-in on Win 10/11) |
 | Office COM fails | Office may not be installed or COM automation blocked by policy |
